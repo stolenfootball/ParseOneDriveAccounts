@@ -1,8 +1,8 @@
-# Sample module in the public domain. Feel free to use this as a template
-# for your modules (and you can remove this header and take complete credit
-# and liability)
+# Module developed by Jeremy Dunn in collaboration with the Massachusetts Attorney
+# General's Office, Digital Evidence Lab
 #
-# Contact: Brian Carrier [carrier <at> sleuthkit [dot] org]
+# Built on template created by Brian Carrier for Autopsy Module Development:
+# https://github.com/sleuthkit/autopsy/blob/develop/pythonExamples/dataSourceIngestModule.py
 #
 # This is free and unencumbered software released into the public domain.
 #
@@ -27,9 +27,6 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-# Simple data source-level ingest module for Autopsy.
-# Search for TODO for the things that you need to change
-# See http://sleuthkit.org/autopsy/docs/api-docs/latest/index.html for documentation
 
 import jarray
 import inspect
@@ -58,18 +55,16 @@ from java.util import Arrays
 
 # Factory that defines the name and details of the module and allows Autopsy
 # to create instances of the modules that will do the analysis.
-# TODO: Rename this to something more specific. Search and replace for it because it is used a few times
-class SampleJythonDataSourceIngestModuleFactory(IngestModuleFactoryAdapter):
+class ParseOneDriveAccountsModuleFactory(IngestModuleFactoryAdapter):
 
     # TODO: give it a unique name.  Will be shown in module list, logs, etc.
-    moduleName = "Sample Data Source Module"
+    moduleName = "Parse OneDrive Accounts"
 
     def getModuleDisplayName(self):
         return self.moduleName
 
-    # TODO: Give it a description
     def getModuleDescription(self):
-        return "Sample module that does X, Y, and Z."
+        return "Module that finds OneDrive accounts in a Windows image and parses them for information."
 
     def getModuleVersionNumber(self):
         return "1.0"
@@ -79,13 +74,12 @@ class SampleJythonDataSourceIngestModuleFactory(IngestModuleFactoryAdapter):
 
     def createDataSourceIngestModule(self, ingestOptions):
         # TODO: Change the class name to the name you'll make below
-        return SampleJythonDataSourceIngestModule()
+        return ParseOneDriveAccountsModule()
 
 
 # Data Source-level ingest module.  One gets created per data source.
-# TODO: Rename this to something more specific. Could just remove "Factory" from above name.
-class SampleJythonDataSourceIngestModule(DataSourceIngestModule):
-    _logger = Logger.getLogger(SampleJythonDataSourceIngestModuleFactory.moduleName)
+class ParseOneDriveAccountsModule(DataSourceIngestModule):
+    _logger = Logger.getLogger(ParseOneDriveAccountsModuleFactory.moduleName)
 
     def log(self, level, msg):
         self._logger.logp(level, self.__class__.__name__, inspect.stack()[1][3], msg)
@@ -140,13 +134,13 @@ class SampleJythonDataSourceIngestModule(DataSourceIngestModule):
             # Make an artifact on the blackboard.  TSK_INTERESTING_FILE_HIT is a generic type of
             # artifact.  Refer to the developer docs for other examples.
             attrs = Arrays.asList(BlackboardAttribute(BlackboardAttribute.Type.TSK_SET_NAME,
-                                                      SampleJythonDataSourceIngestModuleFactory.moduleName,
+                                                      ParseOneDriveAccountsModuleFactory.moduleName,
                                                       "Test file"))
             art = file.newAnalysisResult(BlackboardArtifact.Type.TSK_INTERESTING_FILE_HIT, Score.SCORE_LIKELY_NOTABLE,
                                          None, "Test file", None, attrs).getAnalysisResult()
 
             try:
-                blackboard.postArtifact(art, SampleJythonDataSourceIngestModuleFactory.moduleName, context.getJobId())
+                blackboard.postArtifact(art, ParseOneDriveAccountsModuleFactory.moduleName, context.getJobId())
             except Blackboard.BlackboardException as e:
                 self.log(Level.SEVERE, "Error indexing artifact " + art.getDisplayName())
 
