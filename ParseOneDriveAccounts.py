@@ -28,36 +28,50 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 
-import jarray
 import inspect
+import os
+import shutil
+import ntpath
+
+from com.williballenthin.rejistry import RegistryHiveFile
+from com.williballenthin.rejistry import RegistryKey
+from com.williballenthin.rejistry import RegistryParseException
+from com.williballenthin.rejistry import RegistryValue
+from java.io import File
+from java.lang import Class
 from java.lang import System
+from java.sql  import DriverManager, SQLException
 from java.util.logging import Level
+from java.util import Arrays
 from org.sleuthkit.datamodel import SleuthkitCase
 from org.sleuthkit.datamodel import AbstractFile
-from org.sleuthkit.datamodel import Score
 from org.sleuthkit.datamodel import ReadContentInputStream
 from org.sleuthkit.datamodel import BlackboardArtifact
 from org.sleuthkit.datamodel import BlackboardAttribute
+from org.sleuthkit.datamodel import Blackboard
+from org.sleuthkit.datamodel import TskData
 from org.sleuthkit.autopsy.ingest import IngestModule
 from org.sleuthkit.autopsy.ingest.IngestModule import IngestModuleException
 from org.sleuthkit.autopsy.ingest import DataSourceIngestModule
-from org.sleuthkit.autopsy.ingest import FileIngestModule
 from org.sleuthkit.autopsy.ingest import IngestModuleFactoryAdapter
+from org.sleuthkit.autopsy.ingest import IngestModuleIngestJobSettings
+from org.sleuthkit.autopsy.ingest import IngestModuleIngestJobSettingsPanel
 from org.sleuthkit.autopsy.ingest import IngestMessage
 from org.sleuthkit.autopsy.ingest import IngestServices
+from org.sleuthkit.autopsy.ingest import ModuleDataEvent
 from org.sleuthkit.autopsy.coreutils import Logger
+from org.sleuthkit.autopsy.coreutils import PlatformUtil
 from org.sleuthkit.autopsy.casemodule import Case
 from org.sleuthkit.autopsy.casemodule.services import Services
 from org.sleuthkit.autopsy.casemodule.services import FileManager
-from org.sleuthkit.autopsy.casemodule.services import Blackboard
-from org.sleuthkit.datamodel import Score
-from java.util import Arrays
+from org.sleuthkit.autopsy.datamodel import ContentUtils
+from org.sleuthkit.autopsy.modules.interestingitems import FilesSetsManager
+
 
 # Factory that defines the name and details of the module and allows Autopsy
 # to create instances of the modules that will do the analysis.
 class ParseOneDriveAccountsModuleFactory(IngestModuleFactoryAdapter):
 
-    # TODO: give it a unique name.  Will be shown in module list, logs, etc.
     moduleName = "Parse OneDrive Accounts"
 
     def getModuleDisplayName(self):
@@ -73,7 +87,6 @@ class ParseOneDriveAccountsModuleFactory(IngestModuleFactoryAdapter):
         return True
 
     def createDataSourceIngestModule(self, ingestOptions):
-        # TODO: Change the class name to the name you'll make below
         return ParseOneDriveAccountsModule()
 
 
@@ -88,14 +101,14 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         self.context = None
 
     # Where any setup and configuration is done
-    # 'context' is an instance of org.sleuthkit.autopsy.ingest.IngestJobContext.
-    # See: http://sleuthkit.org/autopsy/docs/api-docs/latest/classorg_1_1sleuthkit_1_1autopsy_1_1ingest_1_1_ingest_job_context.html
-    # TODO: Add any setup code that you need here.
     def startUp(self, context):
         
         # Throw an IngestModule.IngestModuleException exception if there was a problem setting up
         # raise IngestModuleException("Oh No!")
         self.context = context
+
+        # Location of OneDrive accounts in NTUSER.DAT
+        self.registryOneDriveAccounts = "Software/Microsoft/OneDrive/Accounts"
 
     # Where the analysis is done.
     # The 'dataSource' object being passed in is of type org.sleuthkit.datamodel.Content.
@@ -108,59 +121,113 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         # we don't know how much work there is yet
         progressBar.switchToIndeterminate()
 
-        # Use blackboard class to index blackboard artifacts for keyword search
+        # Create temp directory to save the hive files to while processing
+        tempDir = os.path.join(Case.getCurrentCase().getTempDirectory(), "OneDriveProcessing")
+        self.log(Level.INFO, "Create temp directory: " + tempDir)
+        try:
+            os.mkdir(tempDir)
+        except OSError:
+            self.log(Level.INFO, "Temp directory already exists: " + tempDir)
+
+        # Get the blackboard and file manager objects
+        skCase = Case.getCurrentCase().getSleuthkitCase()
         blackboard = Case.getCurrentCase().getSleuthkitCase().getBlackboard()
-
-        # For our example, we will use FileManager to get all
-        # files with the word "test"
-        # in the name and then count and read them
-        # FileManager API: http://sleuthkit.org/autopsy/docs/api-docs/latest/classorg_1_1sleuthkit_1_1autopsy_1_1casemodule_1_1services_1_1_file_manager.html
         fileManager = Case.getCurrentCase().getServices().getFileManager()
-        files = fileManager.findFiles(dataSource, "%test%")
 
-        numFiles = len(files)
-        self.log(Level.INFO, "found " + str(numFiles) + " files")
-        progressBar.switchToDeterminate(numFiles)
-        fileCount = 0
-        for file in files:
+        # Get all user registry files
+        ntuserFiles = fileManager.findFiles(dataSource, "NTUSER.DAT")
+
+        for file in ntuserFiles:
 
             # Check if the user pressed cancel while we were busy
             if self.context.isJobCancelled():
                 return IngestModule.ProcessResult.OK
-
-            self.log(Level.INFO, "Processing file: " + file.getName())
-            fileCount += 1
-
-            # Make an artifact on the blackboard.  TSK_INTERESTING_FILE_HIT is a generic type of
-            # artifact.  Refer to the developer docs for other examples.
-            attrs = Arrays.asList(BlackboardAttribute(BlackboardAttribute.Type.TSK_SET_NAME,
-                                                      ParseOneDriveAccountsModuleFactory.moduleName,
-                                                      "Test file"))
-            art = file.newAnalysisResult(BlackboardArtifact.Type.TSK_INTERESTING_FILE_HIT, Score.SCORE_LIKELY_NOTABLE,
-                                         None, "Test file", None, attrs).getAnalysisResult()
-
+            
+            # Use only registry files in the USERS folder
+            if '/USERS' not in file.getParentPath().upper():
+                continue
+            
+            # Write the hive file to the temp directory
             try:
-                blackboard.postArtifact(art, ParseOneDriveAccountsModuleFactory.moduleName, context.getJobId())
-            except Blackboard.BlackboardException as e:
-                self.log(Level.SEVERE, "Error indexing artifact " + art.getDisplayName())
+                filePath = os.path.join(tempDir, "NTUSER.DAT")
+                ContentUtils.writeToFile(file, File(filePath))
+            except:
+                self.log(Level.INFO, "Error writing hive file to temp directory: " + filePath)
+                continue
 
-            # To further the example, this code will read the contents of the file and count the number of bytes
-            inputStream = ReadContentInputStream(file)
-            buffer = jarray.zeros(1024, "b")
-            totLen = 0
-            readLen = inputStream.read(buffer)
-            while (readLen != -1):
-                totLen = totLen + readLen
-                readLen = inputStream.read(buffer)
+            # Get the user account name from the file path
+            userAccount = file.getParentPath().split("\\")[2]
+
+            # Get all OneDrive accounts from the hive file
+            parentRegistryKey = self.findRegistryKey(RegistryHiveFile(File(filePath)), self.registryOneDriveAccounts)
+
+            for accountKey in parentRegistryKey.getSubkeyList():
+
+                if "Personal" in accountKey.getName():
+                    continue
+                if "Business" in accountKey.getName():
+                    self.processBusinessAccountInfo(RegistryHiveFile(File(filePath)), accountKey)
+
+
+            # # Check if the user pressed cancel while we were busy
+            # if self.context.isJobCancelled():
+            #     return IngestModule.ProcessResult.OK
+
+            # self.log(Level.INFO, "Processing file: " + file.getName())
+            # fileCount += 1
+
+            # # Make an artifact on the blackboard.  TSK_INTERESTING_FILE_HIT is a generic type of
+            # # artifact.  Refer to the developer docs for other examples.
+            # attrs = Arrays.asList(BlackboardAttribute(BlackboardAttribute.Type.TSK_SET_NAME,
+            #                                           ParseOneDriveAccountsModuleFactory.moduleName,
+            #                                           "Test file"))
+            # art = file.newAnalysisResult(BlackboardArtifact.Type.TSK_INTERESTING_FILE_HIT, Score.SCORE_LIKELY_NOTABLE,
+            #                              None, "Test file", None, attrs).getAnalysisResult()
+
+            # try:
+            #     blackboard.postArtifact(art, ParseOneDriveAccountsModuleFactory.moduleName, context.getJobId())
+            # except Blackboard.BlackboardException as e:
+            #     self.log(Level.SEVERE, "Error indexing artifact " + art.getDisplayName())
+
+            # # To further the example, this code will read the contents of the file and count the number of bytes
+            # inputStream = ReadContentInputStream(file)
+            # buffer = jarray.zeros(1024, "b")
+            # totLen = 0
+            # readLen = inputStream.read(buffer)
+            # while (readLen != -1):
+            #     totLen = totLen + readLen
+            #     readLen = inputStream.read(buffer)
 
 
             # Update the progress bar
-            progressBar.progress(fileCount)
+            # progressBar.progress(fileCount)
 
 
         #Post a message to the ingest messages in box.
-        message = IngestMessage.createMessage(IngestMessage.MessageType.DATA,
-            "Sample Jython Data Source Ingest Module", "Found %d files" % fileCount)
-        IngestServices.getInstance().postMessage(message)
+        # message = IngestMessage.createMessage(IngestMessage.MessageType.DATA,
+        #     "Sample Jython Data Source Ingest Module", "Found %d files" % fileCount)
+        # IngestServices.getInstance().postMessage(message)
 
         return IngestModule.ProcessResult.OK
+    
+
+    # Taken from: https://github.com/sleuthkit/autopsy/blob/develop/pythonExamples/Registry_Example.py
+    def findRegistryKey(self, registryHiveFile, registryKey):
+        # Search for the registry key
+        rootKey = registryHiveFile.getRoot()
+        regKeyList = registryKey.split('/')
+        currentKey = rootKey
+        try:
+            for key in regKeyList:
+                currentKey = currentKey.getSubkey(key) 
+            return currentKey
+        except Exception as ex:
+            # Key not found
+            self.log(Level.SEVERE, "registry key parsing issue:", ex)
+            return None      
+
+    def processBusinessAccountInfo(self, registryHiveFile, registryKey):
+        pass
+            
+    def processPersonalAccountInfo(self, registryHiveFile, registryKey):
+        pass
