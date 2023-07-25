@@ -110,6 +110,16 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         # Location of OneDrive accounts in NTUSER.DAT
         self.registryOneDriveAccounts = "Software/Microsoft/OneDrive/Accounts"
 
+        self.businessKeysToRetrieve = ('OneAuthAccountId', 'UserEmail', 'SPOLastUpdate', 'TeamSiteSPOResourceId',
+                                       'DisplayName', 'ServiceEndpointUri', 'UserName', 'LastSignInTime',
+                                       'ClientFirstSignInTimestamp', 'UserFolder', 'ConfiguredTenantId')
+        
+        self.personalKeysToRetrieve = ('UserFolder', 'FirstRunSignInOriginDateTime', 'UserEmail', 'LastSignInTime',
+                                       'ClientFirstSignInTimestamp', 'cid', 'VaultShortcutPath', 'AgeGroup')
+
+        # Accounts found
+        self.accounts = []
+
     # Where the analysis is done.
     # The 'dataSource' object being passed in is of type org.sleuthkit.datamodel.Content.
     # See: http://www.sleuthkit.org/sleuthkit/docs/jni-docs/latest/interfaceorg_1_1sleuthkit_1_1datamodel_1_1_content.html
@@ -164,9 +174,9 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
             for accountKey in parentRegistryKey.getSubkeyList():
 
                 if "Personal" in accountKey.getName():
-                    continue
+                    self.processOneDriveAccountInfo(accountKey, self.personalKeysToRetrieve)
                 if "Business" in accountKey.getName():
-                    self.processBusinessAccountInfo(RegistryHiveFile(File(filePath)), accountKey)
+                    self.processOneDriveAccountInfo(accountKey, self.businessKeysToRetrieve)
 
 
             # # Check if the user pressed cancel while we were busy
@@ -226,8 +236,10 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
             self.log(Level.SEVERE, "registry key parsing issue:", ex)
             return None      
 
-    def processBusinessAccountInfo(self, registryHiveFile, registryKey):
-        pass
-            
-    def processPersonalAccountInfo(self, registryHiveFile, registryKey):
-        pass
+    def processOneDriveAccountInfo(self, registryKey, keysToRetrieve):
+        entry = { "Key": registryKey.getName() }
+        for value in registryKey.getValues():
+            if str(value.getName()) in keysToRetrieve:
+                entry[str(value.getName())] = value.getValue().getAsString()
+        self.accounts.append(entry)
+        
