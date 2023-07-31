@@ -110,13 +110,27 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         # Location of OneDrive accounts in NTUSER.DAT
         self.registryOneDriveAccounts = "Software/Microsoft/OneDrive/Accounts"
 
-        self.businessKeysToRetrieve = ('OneAuthAccountId', 'UserEmail', 'SPOLastUpdate', 'TeamSiteSPOResourceId',
-                                       'DisplayName', 'ServiceEndpointUri', 'UserName', 'LastSignInTime',
-                                       'ClientFirstSignInTimestamp', 'UserFolder', 'ConfiguredTenantId')
+        self.businessKeysToRetrieve = [('OneAuthAccountId',             'TSK_REGISTRY_ONEDRIVE_AUTHACCOUNTID',  'OneDrive Auth Account ID'          ),
+                                       ('UserEmail',                    'TSK_REGISTRY_ONEDRIVE_USEREMAIL',      'OneDrive User Email'               ),
+                                       ('SPOLastUpdate',                'TSK_REGISTRY_ONEDRIVE_SPOLASTUPDATE',  'OneDrive Sharepoint Last Update'   ), 
+                                       ('TeamSiteSPOResourceId',        'TSK_REGISTRY_ONEDRIVE_SPORESOURCEID',  'SharePoint Team Site Resource ID'  ),
+                                       ('DisplayName',                  'TSK_REGISTRY_ONEDRIVE_DISPLAYNAME',    'OneDrive Folder Display Name'      ),
+                                       ('ServiceEndpointUri',           'TSK_REGISTRY_ONEDRIVE_ENDPOINTURI',    'OneDrive Service Endpoint URI'     ), 
+                                       ('UserName',                     'TSK_REGISTRY_ONEDRIVE_USERNAME',       'OneDrive User Name'                ),
+                                       ('LastSignInTime',               'TSK_REGISTRY_ONEDRIVE_LASTSIGNINTIME', 'OneDrive Last Sign-in Time'        ),
+                                       ('ClientFirstSignInTimestamp',   'TSK_REGISTRY_ONEDRIVE_FIRSTSIGNIN',    'OneDrive Client First Sign-in Time'), 
+                                       ('UserFolder',                   'TSK_REGISTRY_ONEDRIVE_USERFOLDER',     'OneDrive User Folder Mount Point'  ),
+                                       ('ConfiguredTenantId',           'TSK_REGISTRY_ONEDRIVE_TENANTID',       'OneDrive Configured Tenant ID'     )]
         
-        self.personalKeysToRetrieve = ('UserFolder', 'FirstRunSignInOriginDateTime', 'UserEmail', 'LastSignInTime',
-                                       'ClientFirstSignInTimestamp', 'cid', 'VaultShortcutPath', 'AgeGroup')
-
+        self.personalKeysToRetrieve = [('UserFolder',                   'TSK_REGISTRY_ONEDRIVE_USERFOLDER',     'OneDrive User Folder Mount Point'  ),
+                                       ('FirstRunSignInOriginDateTime', 'TSK_REGISTRY_ONEDRIVE_FIRSTRUN',       'OneDrive First Run Sign-in Time'   ),
+                                       ('UserEmail',                    'TSK_REGISTRY_ONEDRIVE_USEREMAIL',      'OneDrive User Email'               ),
+                                       ('LastSignInTime',               'TSK_REGISTRY_ONEDRIVE_LASTSIGNINTIME', 'OneDrive Last Sign-in Time'        ),
+                                       ('ClientFirstSignInTimestamp',   'TSK_REGISTRY_ONEDRIVE_FIRSTSIGNIN',    'OneDrive Client First Sign-in Time'),
+                                       ('cid',                          'TSK_REGISTRY_ONEDRIVE_CID',            'OneDrive CID'                      ),
+                                       ('VaultShortcutPath',            'TSK_REGISTRY_ONEDRIVE_VAULTSHORTCUT',  'OneDrive Vault Shortcut Path'      ),
+                                       ('AgeGroup',                     'TSK_REGISTRY_ONEDRIVE_AGEGROUP',       'OneDrive Age Group'                )]
+  
         # Accounts found
         self.accounts = []
 
@@ -177,40 +191,9 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
                     self.processOneDriveAccountInfo(accountKey, self.personalKeysToRetrieve)
                 if "Business" in accountKey.getName():
                     self.processOneDriveAccountInfo(accountKey, self.businessKeysToRetrieve)
+            
 
-
-            # # Check if the user pressed cancel while we were busy
-            # if self.context.isJobCancelled():
-            #     return IngestModule.ProcessResult.OK
-
-            # self.log(Level.INFO, "Processing file: " + file.getName())
-            # fileCount += 1
-
-            # # Make an artifact on the blackboard.  TSK_INTERESTING_FILE_HIT is a generic type of
-            # # artifact.  Refer to the developer docs for other examples.
-            # attrs = Arrays.asList(BlackboardAttribute(BlackboardAttribute.Type.TSK_SET_NAME,
-            #                                           ParseOneDriveAccountsModuleFactory.moduleName,
-            #                                           "Test file"))
-            # art = file.newAnalysisResult(BlackboardArtifact.Type.TSK_INTERESTING_FILE_HIT, Score.SCORE_LIKELY_NOTABLE,
-            #                              None, "Test file", None, attrs).getAnalysisResult()
-
-            # try:
-            #     blackboard.postArtifact(art, ParseOneDriveAccountsModuleFactory.moduleName, context.getJobId())
-            # except Blackboard.BlackboardException as e:
-            #     self.log(Level.SEVERE, "Error indexing artifact " + art.getDisplayName())
-
-            # # To further the example, this code will read the contents of the file and count the number of bytes
-            # inputStream = ReadContentInputStream(file)
-            # buffer = jarray.zeros(1024, "b")
-            # totLen = 0
-            # readLen = inputStream.read(buffer)
-            # while (readLen != -1):
-            #     totLen = totLen + readLen
-            #     readLen = inputStream.read(buffer)
-
-
-            # Update the progress bar
-            # progressBar.progress(fileCount)
+        # TODO: Add final analysis results to the blackboard
 
 
         #Post a message to the ingest messages in box.
@@ -236,10 +219,22 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
             self.log(Level.SEVERE, "registry key parsing issue:", ex)
             return None      
 
+
     def processOneDriveAccountInfo(self, registryKey, keysToRetrieve):
-        entry = { "Key": registryKey.getName() }
-        for value in registryKey.getValues():
-            if str(value.getName()) in keysToRetrieve:
-                entry[str(value.getName())] = value.getValue().getAsString()
+
+        # The main registry key, e.g. "Personal" or "Business"
+        entry = { "key": registryKey.getName(),
+                  "values": [] }
+
+        for key in keysToRetrieve:
+
+            # Get the value from the registry key
+            try:
+                value = registryKey.getValue(key[0]).getAsString()
+                entry["values"].append((key, value))
+            except Exception as ex:
+                self.log(Level.INFO, "Error getting registry value: " + key[0])
+                pass
+
         self.accounts.append(entry)
         
