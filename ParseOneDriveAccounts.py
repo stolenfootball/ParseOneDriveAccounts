@@ -134,12 +134,6 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         # Accounts found
         self.accounts = []
 
-    # Where the analysis is done.
-    # The 'dataSource' object being passed in is of type org.sleuthkit.datamodel.Content.
-    # See: http://www.sleuthkit.org/sleuthkit/docs/jni-docs/latest/interfaceorg_1_1sleuthkit_1_1datamodel_1_1_content.html
-    # 'progressBar' is of type org.sleuthkit.autopsy.ingest.DataSourceIngestModuleProgress
-    # See: http://sleuthkit.org/autopsy/docs/api-docs/latest/classorg_1_1sleuthkit_1_1autopsy_1_1ingest_1_1_data_source_ingest_module_progress.html
-    # TODO: Add your analysis code in here.
     def process(self, dataSource, progressBar):
 
         # we don't know how much work there is yet
@@ -193,13 +187,48 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
                     self.processOneDriveAccountInfo(accountKey, self.businessKeysToRetrieve)
             
 
-        # TODO: Add final analysis results to the blackboard
+        # Setup artifact and attributes
+        artType = skCase.getArtifactType("TSK_ARTIFACT_ONEDRIVE_ACCOUNT")
+        if not artType:
+            try:
+                artType = skCase.addBlackboardArtifactType("TSK_ARTIFACT_ONEDRIVE_ACCOUNT", "OneDrive Account")
+            except:
+                self.log(Level.WARNING, "Artifacts Creation Error, some artifacts may not exist now. ==> ")
+
+        for art in (self.businessKeysToRetrieve + self.personalKeysToRetrieve):
+            try:
+                skCase.addArtifactAttributeType(art[1], BlackboardAttribute.TSK_BLACKBOARD_ATTRIBUTE_VALUE_TYPE.STRING, art[2])
+            except:
+                self.log(Level.WARNING, "Attribute Creation Error, " + art[1] + " may already exist.")
+
+        moduleName = ParseOneDriveAccountsModuleFactory.getModuleDisplayName()
+
+        # Add the accounts to the blackboard
+        for account in self.accounts:
+            self.log(Level.INFO, "Adding account: " + account["key"])
+
+            values = []
+            for value in account["values"]:
+                values.append(BlackboardAttribute(skCase.getAttributeType(value[0][1]), moduleName, value[1]))
+
+            art = File(filePath).newDataArtifact(artType, Arrays.asList(values))
+
+            try:
+                blackboard.postArtifact(art, moduleName, self.context.getJobID())
+            except Exception as ex:
+                self.log(Level.SEVERE, "Error posting artifact to blackboard: " + art.getDisplayName(), + " " + ex)
 
 
-        #Post a message to the ingest messages in box.
-        # message = IngestMessage.createMessage(IngestMessage.MessageType.DATA,
-        #     "Sample Jython Data Source Ingest Module", "Found %d files" % fileCount)
-        # IngestServices.getInstance().postMessage(message)
+        # Cleanup temp directory and files
+        try:
+            shutil.rmtree(tempDir)
+        except:
+            self.log(Level.INFO, "Error deleting temp directory: " + tempDir)
+
+        # Post a message to the ingest messages in box saying we finished.
+        message = IngestMessage.createMessage(IngestMessage.MessageType.DATA,
+            "Parse OneDrive Accounts", " OneDrive accounts have been parsed and analyzed" )
+        IngestServices.getInstance().postMessage(message)
 
         return IngestModule.ProcessResult.OK
     
