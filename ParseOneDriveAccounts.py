@@ -264,7 +264,7 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
 
             # Get the value from the registry key
             try:
-                value = registryKey.getValue(key[0]).getAsString()
+                value = registryKey.getValue(key[0]).getValue().getAsString()
                 entry["values"].append((key, value))
             except Exception as ex:
                 self.log(Level.INFO, "Error getting registry value: " + key[0])
