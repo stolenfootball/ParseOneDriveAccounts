@@ -175,6 +175,9 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
 
             # Get all OneDrive accounts from the hive file
             parentRegistryKey = self.findRegistryKey(RegistryHiveFile(File(filePath)), self.registryOneDriveAccounts)
+            if parentRegistryKey is None:
+                self.log(Level.INFO, "Could not find registry key: " + self.registryOneDriveAccounts + " in hive file: " + filePath)
+                continue
 
             for accountKey in parentRegistryKey.getSubkeyList():
 
