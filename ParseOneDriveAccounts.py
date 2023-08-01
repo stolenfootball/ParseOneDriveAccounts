@@ -215,7 +215,7 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
             art = account["file"].newDataArtifact(artType, Arrays.asList(values))
 
             try:
-                blackboard.postArtifact(art, moduleName, self.context.getJobID())
+                blackboard.postArtifact(art, moduleName)
             except Exception as ex:
                 self.log(Level.SEVERE, "Error posting artifact to blackboard: " + art.getDisplayName(), + " " + ex)
 
