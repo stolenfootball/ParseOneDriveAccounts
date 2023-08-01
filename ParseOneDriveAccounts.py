@@ -167,7 +167,8 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
             
             # Write the hive file to the temp directory
             try:
-                filePath = os.path.join(tempDir, "NTUSER.DAT")
+                account = file.getParentPath().split('/')[2]
+                filePath = os.path.join(tempDir, account + "-NTUSER.DAT")
                 ContentUtils.writeToFile(file, File(filePath))
             except:
                 self.log(Level.INFO, "Error writing hive file to temp directory: " + filePath)
