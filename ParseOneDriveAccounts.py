@@ -69,9 +69,12 @@ from org.sleuthkit.autopsy.datamodel import ContentUtils
 from org.sleuthkit.autopsy.modules.interestingitems import FilesSetsManager
 
 
-# Factory that defines the name and details of the module and allows Autopsy
-# to create instances of the modules that will do the analysis.
+
 class ParseOneDriveAccountsModuleFactory(IngestModuleFactoryAdapter):
+    """
+    Factory that defines the name and details of the module and allows Autopsy
+    to create instances of the modules that will do the analysis.
+    """
 
     moduleName = "Parse OneDrive Accounts"
 
@@ -91,8 +94,15 @@ class ParseOneDriveAccountsModuleFactory(IngestModuleFactoryAdapter):
         return ParseOneDriveAccountsModule()
 
 
-# Data Source-level ingest module.  One gets created per data source.
 class ParseOneDriveAccountsModule(DataSourceIngestModule):
+    """
+    Data Source-level ingest module.  One gets created per data source.
+
+    This particular module finds OneDrive accounts in a Windows image and parses them for information.
+    It checks the registry for each user account, and if it finds a config key for OneDrive, it parses
+    the information from that key.
+    """
+
     _logger = Logger.getLogger(ParseOneDriveAccountsModuleFactory.moduleName)
 
     def log(self, level, msg):
@@ -101,11 +111,16 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
     def __init__(self):
         self.context = None
 
-    # Where any setup and configuration is done
+
     def startUp(self, context):
+        """
+        Perform any setup and configuration that needs to be done prior to processing.
+
+        Args:
+            context: an org.sleuthkit.autopsy.ingest.IngestJobContext object
+                    http://sleuthkit.org/autopsy/docs/api-docs/latest/classorg_1_1sleuthkit_1_1autopsy_1_1ingest_1_1_ingest_job_context.html
+        """
         
-        # Throw an IngestModule.IngestModuleException exception if there was a problem setting up
-        # raise IngestModuleException("Oh No!")
         self.context = context
 
         # Location of OneDrive accounts in NTUSER.DAT
@@ -132,12 +147,22 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
                                        ('VaultShortcutPath',            'TSK_REGISTRY_ONEDRIVE_VAULTSHORTCUT',  'OneDrive Vault Shortcut Path'      ),
                                        ('AgeGroup',                     'TSK_REGISTRY_ONEDRIVE_AGEGROUP',       'OneDrive Age Group'                )]
   
-        # Accounts found
+        # OneDrive accounts found
         self.accounts = []
 
     def process(self, dataSource, progressBar):
+        """
+        Where the analysis is done.
 
-        # we don't know how much work there is yet
+        Args:
+            dataSource: org.sleuthkit.datamodel.Content object
+                        http://www.sleuthkit.org/sleuthkit/docs/jni-docs/latest/interfaceorg_1_1sleuthkit_1_1datamodel_1_1_content.html 
+
+            progressBar: org.sleuthkit.autopsy.ingest.DataSourceIngestModuleProgress
+                        http://sleuthkit.org/autopsy/docs/api-docs/latest/classorg_1_1sleuthkit_1_1autopsy_1_1ingest_1_1_data_source_ingest_module_progress.html
+        """
+
+        # We don't know how much work there is yet
         progressBar.switchToIndeterminate()
 
         # Create temp directory to save the hive files to while processing
@@ -148,7 +173,7 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         except OSError:
             self.log(Level.INFO, "Temp directory already exists: " + tempDir)
 
-        # Get the blackboard and file manager objects
+        # Get the skCase, blackboard, and file manager objects
         skCase = Case.getCurrentCase().getSleuthkitCase()
         blackboard = Case.getCurrentCase().getSleuthkitCase().getBlackboard()
         fileManager = Case.getCurrentCase().getServices().getFileManager()
@@ -175,14 +200,14 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
                 self.log(Level.INFO, "Error writing hive file to temp directory: " + filePath)
                 continue
 
-            # Get all OneDrive accounts from the hive file
+            # Get all OneDrive accounts from the hive file.  If the hive has no OneDrive accounts, continue to the next hive file
             parentRegistryKey = self.findRegistryKey(RegistryHiveFile(File(filePath)), self.registryOneDriveAccounts)
             if parentRegistryKey is None:
                 self.log(Level.INFO, "Could not find registry key: " + self.registryOneDriveAccounts + " in hive file: " + filePath)
                 continue
 
+            # Process the OneDrive accounts
             for accountKey in parentRegistryKey.getSubkeyList():
-
                 if "Personal" in accountKey.getName():
                     self.processOneDriveAccountInfo(accountKey, self.personalKeysToRetrieve, file)
                 if "Business" in accountKey.getName():
@@ -193,10 +218,11 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         artType = skCase.getArtifactType("TSK_ARTIFACT_ONEDRIVE_ACCOUNT")
         if not artType:
             try:
-                artType = skCase.addBlackboardArtifactType("TSK_ARTIFACT_ONEDRIVE_ACCOUNT", "OneDrive Account")
+                artType = skCase.addBlackboardArtifactType("TSK_ARTIFACT_ONEDRIVE_ACCOUNT", "OneDrive Accounts")
             except:
                 self.log(Level.WARNING, "Artifacts Creation Error, some artifacts may not exist now. ==> ")
 
+        # art[1]: TSK Attribute Type || art[2]: Description of the attribute
         for art in (self.businessKeysToRetrieve + self.personalKeysToRetrieve):
             try:
                 skCase.addArtifactAttributeType(art[1], BlackboardAttribute.TSK_BLACKBOARD_ATTRIBUTE_VALUE_TYPE.STRING, art[2])
@@ -211,6 +237,7 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
 
             values = []
             for value in account["values"]:
+                # value[0][1]: TSK Attribute Type || value[1]: Value of the attribute
                 values.append(BlackboardAttribute(skCase.getAttributeType(value[0][1]), moduleName, value[1]))
 
             art = account["file"].newDataArtifact(artType, Arrays.asList(values))
@@ -232,29 +259,60 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
             "Parse OneDrive Accounts", " OneDrive accounts have been parsed and analyzed" )
         IngestServices.getInstance().postMessage(message)
 
+        # We made it to the end with no errors, so return OK
         return IngestModule.ProcessResult.OK
     
 
     def findRegistryKey(self, registryHiveFile, registryKey):
-        # Search for the registry key
+        """
+        Find a registry key in a registry hive file. Returns the registry key if found, otherwise returns None.
+
+        Args:
+            registryHiveFile (java.io.File):         The registry hive file to search
+            registryKey      (str):                  The registry key to search for
+
+        Returns:
+            RegistryKey      (rejistry.RegistryKey): The registry key if found, otherwise None
+        """
+
         rootKey = registryHiveFile.getRoot()
         regKeyList = registryKey.split('/')
         currentKey = rootKey
+
         try:
             for key in regKeyList:
+
                 children = currentKey.getSubkeyList()
                 children_names = [child.getName() for child in children]
+
+                # Subkey found, go to next level
                 if key in children_names:
                     currentKey = currentKey.getSubkey(key) 
+                
+                # Subkey not found, return None
                 else:
                     return None
+                
+            # All subkeys found, return the last subkey
             return currentKey
+        
         except Exception as ex:
-            self.log(Level.SEVERE, "registry key parsing issue:", ex)
+            self.log(Level.SEVERE, "Registry key parsing issue:", ex)
             return None      
 
 
     def processOneDriveAccountInfo(self, registryKey, keysToRetrieve, file):
+        """
+        Process the OneDrive account information from the registry key and add it to the accounts list.
+
+        Args:
+            registryKey      (rejistry.RegistryKey):                         The registry key to process
+            keysToRetrieve   (list):                                         The list of keys to retrieve from the registry key
+            file             (org.sleuthkit.datamodel.AbstractFile):         The hive file the registry key was found in
+
+        Returns:
+            None
+        """
 
         # The main registry key, e.g. "Personal" or "Business"
         entry = { "key": registryKey.getName(),
@@ -267,15 +325,20 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
             try:
                 raw_value = registryKey.getValue(key[0])
 
+                # If registry value is a string, get the value as a string
                 if "SZ" in str(raw_value.getValueType()):
                     value = raw_value.getValue().getAsString()
 
+                # If registry value is a word, get the value as a number
                 elif "WORD" in str(raw_value.getValueType()):
                     value = raw_value.getValue().getAsNumber()
-
+                
+                # Otherwise, get the value as raw data and decode it to a string as best as possible
                 else:
                     value = raw_value.getValue().getAsRawData().decode(encoding='utf-8', errors='ignore')
 
+                # Attempt to decode the value as a datetime then append it.  Done this way because the datetimes in the 
+                # registry entries are sometimes stored as strings and sometimes as numbers.
                 entry["values"].append((key, self.tryDateTime(value)))
 
             except Exception as ex:
@@ -286,6 +349,16 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
 
 
     def tryDateTime(self, time):
+        """
+        Try to convert a time to a datetime object.  If it fails, return the original input as a string.
+
+        Args:
+            time (any): The time to convert
+
+        Returns:
+            string: The time as a string
+        """
+        
         try:
             return str(datetime.fromtimestamp(int(time)))
         except:
