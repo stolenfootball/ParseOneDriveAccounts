@@ -190,10 +190,16 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
             # Use only registry files in the USERS folder
             if '/USERS' not in file.getParentPath().upper():
                 continue
+
+            # Get the account name from the file path
+            try:
+                account = file.getParentPath().split('/')[2]
+            except:
+                self.log(Level.WARNING, "Error getting account name from file path: " + file.getParentPath())
+                continue
             
             # Write the hive file to the temp directory
             try:
-                account = file.getParentPath().split('/')[2]
                 filePath = os.path.join(tempDir, account + "-NTUSER.DAT")
                 ContentUtils.writeToFile(file, File(filePath))
             except:
@@ -358,7 +364,7 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         Returns:
             string: The time as a string
         """
-        
+
         try:
             return str(datetime.fromtimestamp(int(time)))
         except:
