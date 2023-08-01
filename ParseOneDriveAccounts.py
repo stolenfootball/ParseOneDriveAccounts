@@ -202,7 +202,7 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
             except:
                 self.log(Level.WARNING, "Attribute Creation Error, " + art[1] + " may already exist.")
 
-        moduleName = ParseOneDriveAccountsModuleFactory.getModuleDisplayName()
+        moduleName = ParseOneDriveAccountsModuleFactory.moduleName
 
         # Add the accounts to the blackboard
         for account in self.accounts:
