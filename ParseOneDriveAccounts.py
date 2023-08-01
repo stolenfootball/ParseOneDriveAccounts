@@ -178,6 +178,7 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         blackboard = Case.getCurrentCase().getSleuthkitCase().getBlackboard()
         fileManager = Case.getCurrentCase().getServices().getFileManager()
 
+
         # Get all user registry files
         ntuserFiles = fileManager.findFiles(dataSource, "NTUSER.DAT")
 
