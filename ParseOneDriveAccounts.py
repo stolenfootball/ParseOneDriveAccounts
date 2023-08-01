@@ -32,6 +32,7 @@ import inspect
 import os
 import shutil
 import ntpath
+from datetime import datetime
 
 from com.williballenthin.rejistry import RegistryHiveFile
 from com.williballenthin.rejistry import RegistryKey
@@ -110,26 +111,26 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         # Location of OneDrive accounts in NTUSER.DAT
         self.registryOneDriveAccounts = "Software/Microsoft/OneDrive/Accounts"
 
-        self.businessKeysToRetrieve = [('OneAuthAccountId',             'TSK_REGISTRY_ONEDRIVE_AUTHACCOUNTID',  'OneDrive Auth Account ID',           "SZ"   ),
-                                       ('UserEmail',                    'TSK_REGISTRY_ONEDRIVE_USEREMAIL',      'OneDrive User Email',                "SZ"   ),
-                                       ('SPOLastUpdate',                'TSK_REGISTRY_ONEDRIVE_SPOLASTUPDATE',  'OneDrive Sharepoint Last Update',    "WORD" ), 
-                                       ('TeamSiteSPOResourceId',        'TSK_REGISTRY_ONEDRIVE_SPORESOURCEID',  'SharePoint Team Site Resource ID',   "SZ"   ),
-                                       ('DisplayName',                  'TSK_REGISTRY_ONEDRIVE_DISPLAYNAME',    'OneDrive Folder Display Name',       "SZ"   ),
-                                       ('ServiceEndpointUri',           'TSK_REGISTRY_ONEDRIVE_ENDPOINTURI',    'OneDrive Service Endpoint URI',      "SZ"   ), 
-                                       ('UserName',                     'TSK_REGISTRY_ONEDRIVE_USERNAME',       'OneDrive User Name',                 "SZ"   ),
-                                       ('LastSignInTime',               'TSK_REGISTRY_ONEDRIVE_LASTSIGNINTIME', 'OneDrive Last Sign-in Time',         "WORD" ),
-                                       ('ClientFirstSignInTimestamp',   'TSK_REGISTRY_ONEDRIVE_FIRSTSIGNIN',    'OneDrive Client First Sign-in Time', "WORD" ), 
-                                       ('UserFolder',                   'TSK_REGISTRY_ONEDRIVE_USERFOLDER',     'OneDrive User Folder Mount Point',   "SZ"   ),
-                                       ('ConfiguredTenantId',           'TSK_REGISTRY_ONEDRIVE_TENANTID',       'OneDrive Configured Tenant ID',      "SZ"   )]
+        self.businessKeysToRetrieve = [('OneAuthAccountId',             'TSK_REGISTRY_ONEDRIVE_AUTHACCOUNTID',  'OneDrive Auth Account ID'          ),
+                                       ('UserEmail',                    'TSK_REGISTRY_ONEDRIVE_USEREMAIL',      'OneDrive User Email'               ),
+                                       ('SPOLastUpdate',                'TSK_REGISTRY_ONEDRIVE_SPOLASTUPDATE',  'OneDrive Sharepoint Last Update'   ), 
+                                       ('TeamSiteSPOResourceId',        'TSK_REGISTRY_ONEDRIVE_SPORESOURCEID',  'SharePoint Team Site Resource ID'  ),
+                                       ('DisplayName',                  'TSK_REGISTRY_ONEDRIVE_DISPLAYNAME',    'OneDrive Folder Display Name'      ),
+                                       ('ServiceEndpointUri',           'TSK_REGISTRY_ONEDRIVE_ENDPOINTURI',    'OneDrive Service Endpoint URI'     ), 
+                                       ('UserName',                     'TSK_REGISTRY_ONEDRIVE_USERNAME',       'OneDrive User Name'                ),
+                                       ('LastSignInTime',               'TSK_REGISTRY_ONEDRIVE_LASTSIGNINTIME', 'OneDrive Last Sign-in Time'        ),
+                                       ('ClientFirstSignInTimestamp',   'TSK_REGISTRY_ONEDRIVE_FIRSTSIGNIN',    'OneDrive Client First Sign-in Time'), 
+                                       ('UserFolder',                   'TSK_REGISTRY_ONEDRIVE_USERFOLDER',     'OneDrive User Folder Mount Point'  ),
+                                       ('ConfiguredTenantId',           'TSK_REGISTRY_ONEDRIVE_TENANTID',       'OneDrive Configured Tenant ID'     )]
         
-        self.personalKeysToRetrieve = [('UserFolder',                   'TSK_REGISTRY_ONEDRIVE_USERFOLDER',     'OneDrive User Folder Mount Point',   "SZ"   ),
-                                       ('FirstRunSignInOriginDateTime', 'TSK_REGISTRY_ONEDRIVE_FIRSTRUN',       'OneDrive First Run Sign-in Time',    "SZ"   ),
-                                       ('UserEmail',                    'TSK_REGISTRY_ONEDRIVE_USEREMAIL',      'OneDrive User Email',                "SZ"   ),
-                                       ('LastSignInTime',               'TSK_REGISTRY_ONEDRIVE_LASTSIGNINTIME', 'OneDrive Last Sign-in Time',         "WORD" ),
-                                       ('ClientFirstSignInTimestamp',   'TSK_REGISTRY_ONEDRIVE_FIRSTSIGNIN',    'OneDrive Client First Sign-in Time', "WORD" ),
-                                       ('cid',                          'TSK_REGISTRY_ONEDRIVE_CID',            'OneDrive CID',                       "SZ"   ),
-                                       ('VaultShortcutPath',            'TSK_REGISTRY_ONEDRIVE_VAULTSHORTCUT',  'OneDrive Vault Shortcut Path',       "SZ"   ),
-                                       ('AgeGroup',                     'TSK_REGISTRY_ONEDRIVE_AGEGROUP',       'OneDrive Age Group',                 "SZ"   )]
+        self.personalKeysToRetrieve = [('UserFolder',                   'TSK_REGISTRY_ONEDRIVE_USERFOLDER',     'OneDrive User Folder Mount Point'  ),
+                                       ('FirstRunSignInOriginDateTime', 'TSK_REGISTRY_ONEDRIVE_FIRSTRUN',       'OneDrive First Run Sign-in Time'   ),
+                                       ('UserEmail',                    'TSK_REGISTRY_ONEDRIVE_USEREMAIL',      'OneDrive User Email'               ),
+                                       ('LastSignInTime',               'TSK_REGISTRY_ONEDRIVE_LASTSIGNINTIME', 'OneDrive Last Sign-in Time'        ),
+                                       ('ClientFirstSignInTimestamp',   'TSK_REGISTRY_ONEDRIVE_FIRSTSIGNIN',    'OneDrive Client First Sign-in Time'),
+                                       ('cid',                          'TSK_REGISTRY_ONEDRIVE_CID',            'OneDrive CID'                      ),
+                                       ('VaultShortcutPath',            'TSK_REGISTRY_ONEDRIVE_VAULTSHORTCUT',  'OneDrive Vault Shortcut Path'      ),
+                                       ('AgeGroup',                     'TSK_REGISTRY_ONEDRIVE_AGEGROUP',       'OneDrive Age Group'                )]
   
         # Accounts found
         self.accounts = []
@@ -264,15 +265,29 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
 
             # Get the value from the registry key
             try:
-                raw_value = registryKey.getValue(key[0]).getValue()
-                if key[3] == "SZ":
-                    value = raw_value.getAsString()
+                raw_value = registryKey.getValue(key[0])
+
+                if "SZ" in str(raw_value.getValueType()):
+                    value = raw_value.getValue().getAsString()
+
+                elif "WORD" in str(raw_value.getValueType()):
+                    value = raw_value.getValue().getAsNumber()
+
                 else:
-                    value = raw_value.getAsNumber()
-                entry["values"].append((key, value))
+                    value = raw_value.getValue().getAsRawData().decode(encoding='utf-8', errors='ignore')
+
+                entry["values"].append((key, self.tryDateTime(value)))
+
             except Exception as ex:
-                self.log(Level.INFO, "Error getting registry value: " + key[0])
+                self.log(Level.INFO, "Error getting registry value: " + key[0] + " --> " + str(ex))
                 pass
 
         self.accounts.append(entry)
+
+
+    def tryDateTime(self, time):
+        try:
+            return str(datetime.fromtimestamp(int(time)))
+        except:
+            return str(time)
         
