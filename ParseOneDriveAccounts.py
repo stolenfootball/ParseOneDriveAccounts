@@ -183,9 +183,9 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
             for accountKey in parentRegistryKey.getSubkeyList():
 
                 if "Personal" in accountKey.getName():
-                    self.processOneDriveAccountInfo(accountKey, self.personalKeysToRetrieve)
+                    self.processOneDriveAccountInfo(accountKey, self.personalKeysToRetrieve, file)
                 if "Business" in accountKey.getName():
-                    self.processOneDriveAccountInfo(accountKey, self.businessKeysToRetrieve)
+                    self.processOneDriveAccountInfo(accountKey, self.businessKeysToRetrieve, file)
             
 
         # Setup artifact and attributes
@@ -212,7 +212,7 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
             for value in account["values"]:
                 values.append(BlackboardAttribute(skCase.getAttributeType(value[0][1]), moduleName, value[1]))
 
-            art = File(filePath).newDataArtifact(artType, Arrays.asList(values))
+            art = account["file"].newDataArtifact(artType, Arrays.asList(values))
 
             try:
                 blackboard.postArtifact(art, moduleName, self.context.getJobID())
@@ -253,11 +253,12 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
             return None      
 
 
-    def processOneDriveAccountInfo(self, registryKey, keysToRetrieve):
+    def processOneDriveAccountInfo(self, registryKey, keysToRetrieve, file):
 
         # The main registry key, e.g. "Personal" or "Business"
         entry = { "key": registryKey.getName(),
-                  "values": [] }
+                  "values": [],
+                  "file": file }
 
         for key in keysToRetrieve:
 
