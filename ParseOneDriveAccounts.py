@@ -230,7 +230,6 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         return IngestModule.ProcessResult.OK
     
 
-    # Taken from: https://github.com/sleuthkit/autopsy/blob/develop/pythonExamples/Registry_Example.py
     def findRegistryKey(self, registryHiveFile, registryKey):
         # Search for the registry key
         rootKey = registryHiveFile.getRoot()
@@ -238,10 +237,14 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         currentKey = rootKey
         try:
             for key in regKeyList:
-                currentKey = currentKey.getSubkey(key) 
+                children = currentKey.getSubkeyList()
+                children_names = [child.getName() for child in children]
+                if key in children_names:
+                    currentKey = currentKey.getSubkey(key) 
+                else:
+                    return None
             return currentKey
         except Exception as ex:
-            # Key not found
             self.log(Level.SEVERE, "registry key parsing issue:", ex)
             return None      
 
