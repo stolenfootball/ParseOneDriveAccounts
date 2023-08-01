@@ -173,9 +173,6 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
                 self.log(Level.INFO, "Error writing hive file to temp directory: " + filePath)
                 continue
 
-            # Get the user account name from the file path
-            userAccount = file.getParentPath().split("\\")[2]
-
             # Get all OneDrive accounts from the hive file
             parentRegistryKey = self.findRegistryKey(RegistryHiveFile(File(filePath)), self.registryOneDriveAccounts)
 
