@@ -326,12 +326,16 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
                   "values": [],
                   "file": file }
 
-        for key in keysToRetrieve:
+        # List of all registry keys that are valid to retrieve
+        keys = [key[0] for key in keysToRetrieve]
+
+        for raw_value in registryKey.getValueList():
 
             # Get the value from the registry key
             try:
-                raw_value = registryKey.getValue(key[0])
-
+                if raw_value.getName() not in keys:
+                    continue
+                
                 # If registry value is a string, get the value as a string
                 if "SZ" in str(raw_value.getValueType()):
                     value = raw_value.getValue().getAsString()
@@ -344,12 +348,16 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
                 else:
                     value = raw_value.getValue().getAsRawData().decode(encoding='utf-8', errors='ignore')
 
+                
+                # Find the key tuple that corresponds to the registry key
+                key = self.findKey(raw_value.getName(), keysToRetrieve)
+
                 # Attempt to decode the value as a datetime then append it.  Done this way because the datetimes in the 
                 # registry entries are sometimes stored as strings and sometimes as numbers.
                 entry["values"].append((key, self.tryDateTime(value)))
 
             except Exception as ex:
-                self.log(Level.INFO, "Error getting registry value: " + key[0] + " --> " + str(ex))
+                self.log(Level.INFO, "Error getting registry value: " + raw_value.getName() + " --> " + str(ex))
                 pass
 
         self.accounts.append(entry)
@@ -371,3 +379,21 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         except:
             return str(time)
         
+        
+    def findKey(self, value, keysToRetrieve):
+        """
+        Retrieve a key tuple based on the registry value to retrieve
+
+        Args:
+            value (string): The value to look up
+            keysToRetrieve (list[tuple]): List to look the value up in.  Value must be in first slot
+
+        Returns:
+            key (tuple): The tuple containing the key
+        """
+
+        for key in keysToRetrieve:
+            if key[0] in value:
+                return key
+            
+        return None
