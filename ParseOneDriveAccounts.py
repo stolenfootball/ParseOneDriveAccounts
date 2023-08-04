@@ -200,13 +200,13 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
                 continue
             
             # Write the hive file to the temp directory
-            try:
-                filePath = os.path.join(tempDir, account + "-NTUSER.DAT")
-                ContentUtils.writeToFile(file, File(filePath))
-            except:
-                self.log(Level.INFO, "Error writing hive file to temp directory: " + filePath)
-                continue
-
+            filePath = os.path.join(tempDir, account + "-NTUSER.DAT")
+            if not os.path.exists(filePath):
+                try:
+                    ContentUtils.writeToFile(file, File(filePath))
+                except:
+                    self.log(Level.INFO, "Error writing hive file to temp directory: " + filePath)
+                    continue
             # Get all OneDrive accounts from the hive file.  If the hive has no OneDrive accounts, continue to the next hive file
             parentRegistryKey = self.findRegistryKey(RegistryHiveFile(File(filePath)), self.registryOneDriveAccounts)
             if parentRegistryKey is None:
