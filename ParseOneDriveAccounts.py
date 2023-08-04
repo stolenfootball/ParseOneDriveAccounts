@@ -117,8 +117,8 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         Perform any setup and configuration that needs to be done prior to processing.
 
         Args:
-            context: an org.sleuthkit.autopsy.ingest.IngestJobContext object
-                    http://sleuthkit.org/autopsy/docs/api-docs/latest/classorg_1_1sleuthkit_1_1autopsy_1_1ingest_1_1_ingest_job_context.html
+            context: org.sleuthkit.autopsy.ingest.IngestJobContext
+                     http://sleuthkit.org/autopsy/docs/api-docs/latest/classorg_1_1sleuthkit_1_1autopsy_1_1ingest_1_1_ingest_job_context.html
         """
         
         self.context = context
@@ -155,11 +155,15 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         Where the analysis is done.
 
         Args:
-            dataSource: org.sleuthkit.datamodel.Content object
+            dataSource: org.sleuthkit.datamodel.Content
                         http://www.sleuthkit.org/sleuthkit/docs/jni-docs/latest/interfaceorg_1_1sleuthkit_1_1datamodel_1_1_content.html 
 
             progressBar: org.sleuthkit.autopsy.ingest.DataSourceIngestModuleProgress
-                        http://sleuthkit.org/autopsy/docs/api-docs/latest/classorg_1_1sleuthkit_1_1autopsy_1_1ingest_1_1_data_source_ingest_module_progress.html
+                         http://sleuthkit.org/autopsy/docs/api-docs/latest/classorg_1_1sleuthkit_1_1autopsy_1_1ingest_1_1_data_source_ingest_module_progress.html
+
+        Returns:
+            Result status: org.sleuthkit.autopsy.ingest.IngestModule.ProcessResult
+                           https://github.com/sleuthkit/autopsy/blob/develop/Core/src/org/sleuthkit/autopsy/ingest/IngestModule.java
         """
 
         # We don't know how much work there is yet
@@ -207,6 +211,7 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
                 except:
                     self.log(Level.INFO, "Error writing hive file to temp directory: " + filePath)
                     continue
+
             # Get all OneDrive accounts from the hive file.  If the hive has no OneDrive accounts, continue to the next hive file
             parentRegistryKey = self.findRegistryKey(RegistryHiveFile(File(filePath)), self.registryOneDriveAccounts)
             if parentRegistryKey is None:
@@ -379,7 +384,7 @@ class ParseOneDriveAccountsModule(DataSourceIngestModule):
         except:
             return str(time)
         
-        
+
     def findKey(self, value, keysToRetrieve):
         """
         Retrieve a key tuple based on the registry value to retrieve
